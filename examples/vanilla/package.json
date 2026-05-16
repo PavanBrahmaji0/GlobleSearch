@@ -1,0 +1,20 @@
+{
+  "name": "globlesearch-vanilla-demo",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@globlesearch/core": "*",
+    "cesium": "^1.120.0",
+    "leaflet": "^1.9.4"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "vite": "^6.0.0",
+    "vite-plugin-cesium": "^1.2.23"
+  }
+}

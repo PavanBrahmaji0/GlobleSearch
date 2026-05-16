@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GlobleSearch – Interactive 3D Globe</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      height: 100%;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #000011;
+    }
+
+    #globe-container {
+      width: 100vw;
+      height: 100vh;
+    }
+
+    /* ── Search bar ── */
+    #search-panel {
+      position: absolute;
+      top: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1000;
+      width: min(460px, calc(100vw - 32px));
+    }
+
+    #search-form {
+      display: flex;
+      gap: 8px;
+      background: rgba(10, 20, 40, 0.85);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(100, 160, 255, 0.3);
+      border-radius: 12px;
+      padding: 10px 14px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+    }
+
+    #search-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: #e8f0ff;
+      font-size: 16px;
+      placeholder-color: #6080b0;
+    }
+
+    #search-input::placeholder { color: #6080b0; }
+
+    #search-btn {
+      background: linear-gradient(135deg, #2060d0, #4090ff);
+      border: none;
+      border-radius: 8px;
+      color: white;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      padding: 8px 18px;
+      transition: opacity 0.2s;
+    }
+    #search-btn:hover { opacity: 0.85; }
+    #search-btn:disabled { opacity: 0.4; cursor: default; }
+
+    /* ── Suggestions dropdown ── */
+    #suggestions {
+      margin-top: 6px;
+      background: rgba(10, 20, 40, 0.92);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(100, 160, 255, 0.25);
+      border-radius: 10px;
+      overflow: hidden;
+      display: none;
+    }
+
+    .suggestion-item {
+      padding: 11px 16px;
+      color: #c8d8f8;
+      cursor: pointer;
+      font-size: 14px;
+      border-bottom: 1px solid rgba(100,160,255,0.1);
+      transition: background 0.15s;
+    }
+    .suggestion-item:last-child { border-bottom: none; }
+    .suggestion-item:hover { background: rgba(60, 100, 200, 0.35); }
+    .suggestion-item .addr { font-size: 11px; color: #6080b0; margin-top: 2px; }
+
+    /* ── Status badge ── */
+    #status {
+      position: absolute;
+      bottom: 28px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1000;
+      background: rgba(10, 20, 40, 0.8);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(100,160,255,0.2);
+      border-radius: 20px;
+      color: #8ab0e8;
+      font-size: 13px;
+      padding: 8px 20px;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.4s;
+    }
+    #status.visible { opacity: 1; }
+
+    /* ── Morph button ── */
+    #morph-btn {
+      position: absolute;
+      bottom: 28px;
+      right: 24px;
+      z-index: 1000;
+      background: rgba(10, 20, 40, 0.85);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(100, 160, 255, 0.3);
+      border-radius: 10px;
+      color: #8ab0e8;
+      cursor: pointer;
+      font-size: 13px;
+      padding: 10px 18px;
+      transition: all 0.2s;
+      display: none;
+    }
+    #morph-btn:hover { background: rgba(30,60,120,0.85); color: #e8f0ff; }
+
+    /* ── Attribution ── */
+    #attribution {
+      position: absolute;
+      bottom: 6px;
+      left: 8px;
+      z-index: 999;
+      font-size: 10px;
+      color: rgba(200,220,255,0.4);
+    }
+    #attribution a { color: inherit; }
+  </style>
+</head>
+<body>
+  <div id="globe-container"></div>
+
+  <div id="search-panel">
+    <form id="search-form" autocomplete="off">
+      <input
+        id="search-input"
+        type="text"
+        placeholder="Search any location on Earth…"
+        spellcheck="false"
+      />
+      <button id="search-btn" type="submit">Fly</button>
+    </form>
+    <div id="suggestions"></div>
+  </div>
+
+  <div id="status"></div>
+
+  <button id="morph-btn">Switch to 2D Map</button>
+
+  <div id="attribution">
+    Imagery © <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors &nbsp;|&nbsp;
+    Geocoding by <a href="https://nominatim.org" target="_blank">Nominatim</a>
+  </div>
+
+  <script type="module" src="./main.ts"></script>
+</body>
+</html>
