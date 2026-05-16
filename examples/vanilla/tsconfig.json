@@ -1,0 +1,9 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "paths": {
+      "@globlesearch/core": ["../../packages/core/src/index.ts"]
+    }
+  },
+  "include": ["src/**/*", "main.ts", "vite.config.ts"]
+}
