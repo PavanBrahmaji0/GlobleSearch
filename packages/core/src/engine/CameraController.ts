@@ -2,22 +2,22 @@ import * as Cesium from 'cesium';
 import type { CameraPosition } from '../types/geo';
 import type { GlobeMapConfig } from '../types/config';
 
+export const INITIAL_ALTITUDE = 20_000_000; // 20,000 km — full globe visible
+
 export class CameraController {
   private viewer: Cesium.Viewer;
   private config: GlobeMapConfig;
-  private rotationAngle = 0;
-  private rotationRAF: number | null = null;
-  private lastTime: number | null = null;
   private rotatingEnabled = false;
-  private currentAltitude = 20_000_000;
+  private lastRenderTime: number | null = null;
+  // Bound listener stored so we can remove it
+  private preRenderHandler: (() => void) | null = null;
 
   constructor(viewer: Cesium.Viewer, config: GlobeMapConfig) {
     this.viewer = viewer;
     this.config = config;
 
-    // Start at a wide orbit view
     viewer.camera.setView({
-      destination: Cesium.Cartesian3.fromDegrees(0, 20, this.currentAltitude),
+      destination: Cesium.Cartesian3.fromDegrees(0, 20, INITIAL_ALTITUDE),
       orientation: {
         heading: Cesium.Math.toRadians(0),
         pitch: Cesium.Math.toRadians(-90),
@@ -26,84 +26,75 @@ export class CameraController {
     });
   }
 
+  get isRotating(): boolean {
+    return this.rotatingEnabled;
+  }
+
   startRotation() {
     if (this.rotatingEnabled) return;
     this.rotatingEnabled = true;
-    this.lastTime = null;
-    this.tick();
+    this.lastRenderTime = null;
+
+    this.preRenderHandler = () => this.onPreRender();
+    // scene.preRender fires every frame just before Cesium draws — safe for camera updates
+    this.viewer.scene.preRender.addEventListener(this.preRenderHandler);
+    // Force at least one render so the loop starts
+    this.viewer.scene.requestRender();
   }
 
   stopRotation() {
+    if (!this.rotatingEnabled) return;
     this.rotatingEnabled = false;
-    if (this.rotationRAF !== null) {
-      cancelAnimationFrame(this.rotationRAF);
-      this.rotationRAF = null;
+    if (this.preRenderHandler) {
+      this.viewer.scene.preRender.removeEventListener(this.preRenderHandler);
+      this.preRenderHandler = null;
     }
-    this.lastTime = null;
+    this.lastRenderTime = null;
   }
 
-  private tick = () => {
+  private onPreRender() {
     if (!this.rotatingEnabled) return;
-    this.rotationRAF = requestAnimationFrame(this.tick);
 
     const now = performance.now();
-    if (this.lastTime === null) {
-      this.lastTime = now;
+    if (this.lastRenderTime === null) {
+      this.lastRenderTime = now;
       return;
     }
-    const dt = (now - this.lastTime) / 1000; // seconds
-    this.lastTime = now;
+    const dt = Math.min((now - this.lastRenderTime) / 1000, 0.05); // cap at 50ms to avoid jump on tab re-focus
+    this.lastRenderTime = now;
 
-    // Speed proportional to altitude so it slows as we zoom in
-    const altRatio = Math.min(this.currentAltitude / 20_000_000, 1);
-    const speed = this.config.rotation.speed * Math.sqrt(altRatio);
-    const delta = this.config.rotation.direction === 'east' ? speed * dt : -speed * dt;
-    this.rotationAngle += delta;
+    // Slow down rotation as camera zooms in (proportional to sqrt of altitude ratio)
+    const alt = Cesium.Cartographic.fromCartesian(this.viewer.camera.position).height;
+    const altRatio = Math.min(alt / INITIAL_ALTITUDE, 1);
+    const speedDeg = this.config.rotation.speed * Math.sqrt(altRatio);
+    const angleRad = Cesium.Math.toRadians(speedDeg * dt);
 
-    const camera = this.viewer.camera;
-    const carto = Cesium.Cartographic.fromCartesian(camera.position);
-    const lng = Cesium.Math.toDegrees(carto.longitude) + delta;
-    const lat = Cesium.Math.toDegrees(carto.latitude);
-    const alt = carto.height;
-
-    this.currentAltitude = alt;
-
-    camera.setView({
-      destination: Cesium.Cartesian3.fromDegrees(lng, lat, alt),
-      orientation: {
-        heading: camera.heading,
-        pitch: camera.pitch,
-        roll: 0,
-      },
-    });
-  };
-
-  setAltitude(altitude: number) {
-    this.currentAltitude = altitude;
+    // Rotate camera around Earth's polar axis (UNIT_Z = north pole direction in ECEF)
+    // Positive angle = camera moves westward = globe appears to spin eastward
+    const sign = this.config.rotation.direction === 'east' ? 1 : -1;
+    this.viewer.camera.rotate(Cesium.Cartesian3.UNIT_Z, sign * angleRad);
   }
 
   getPosition(): CameraPosition {
-    const carto = Cesium.Cartographic.fromCartesian(this.viewer.camera.position);
+    const cam = this.viewer.camera;
+    const carto = Cesium.Cartographic.fromCartesian(cam.position);
     return {
       lat: Cesium.Math.toDegrees(carto.latitude),
       lng: Cesium.Math.toDegrees(carto.longitude),
       altitude: carto.height,
-      heading: Cesium.Math.toDegrees(this.viewer.camera.heading),
-      pitch: Cesium.Math.toDegrees(this.viewer.camera.pitch),
+      heading: Cesium.Math.toDegrees(cam.heading),
+      pitch: Cesium.Math.toDegrees(cam.pitch),
     };
   }
 
-  setPosition(pos: CameraPosition, duration = 0) {
-    if (duration === 0) {
-      this.viewer.camera.setView({
-        destination: Cesium.Cartesian3.fromDegrees(pos.lng, pos.lat, pos.altitude),
-        orientation: {
-          heading: Cesium.Math.toRadians(pos.heading ?? 0),
-          pitch: Cesium.Math.toRadians(pos.pitch ?? -90),
-          roll: 0,
-        },
-      });
-      this.currentAltitude = pos.altitude;
-    }
+  setPosition(pos: CameraPosition) {
+    this.viewer.camera.setView({
+      destination: Cesium.Cartesian3.fromDegrees(pos.lng, pos.lat, pos.altitude),
+      orientation: {
+        heading: Cesium.Math.toRadians(pos.heading ?? 0),
+        pitch: Cesium.Math.toRadians(pos.pitch ?? -90),
+        roll: 0,
+      },
+    });
   }
 }

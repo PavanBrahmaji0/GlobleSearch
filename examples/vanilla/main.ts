@@ -11,7 +11,7 @@ const container = document.getElementById('globe-container') as HTMLElement;
 const globe = new GlobeMap(container, {
   rotation: {
     enabled: true,
-    speed: 0.6,
+    speed: 4.0,
     direction: 'east',
     pauseOnHover: true,
     pauseOnSearch: true,

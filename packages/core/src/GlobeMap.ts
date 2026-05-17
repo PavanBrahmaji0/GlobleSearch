@@ -21,6 +21,9 @@ export class GlobeMap {
   private config: GlobeMapConfig;
   private handlers = new Map<GlobeMapEvent, Set<AnyHandler>>();
   private isFlying = false;
+  // Once a flight or search happens, hover must NOT restart rotation
+  // (prevents the globe spinning around the destination at low altitude)
+  private hasFlown = false;
   private hoverUnlisten: (() => void) | null = null;
 
   constructor(container: HTMLElement, config?: DeepPartial<GlobeMapConfig>) {
@@ -49,10 +52,6 @@ export class GlobeMap {
 
     if (typeof location === 'string') {
       this.emit('searchStart', { query: location });
-      if (this.config.rotation.pauseOnSearch) {
-        this.camera.stopRotation();
-        this.emit('rotationPause', {});
-      }
       const results = await this.geocoder.search(location);
       this.emit('searchResults', { results });
       if (results.length === 0) return;
@@ -61,26 +60,22 @@ export class GlobeMap {
       dest = { lat: location.lat, lng: location.lng };
     }
 
-    if (options) {
-      // Temporarily patch config for this flight
-      if (options.mode) this.config.flight.mode = options.mode;
-      if (options.duration) this.config.flight.duration = options.duration;
-      if (options.altitude) this.config.flight.minimumAltitude = options.altitude;
-    }
+    // Stop rotation for the flight and mark that a flight occurred
+    this.camera.stopRotation();
+    this.hasFlown = true;
+    this.emit('rotationPause', {});
+
+    if (options?.mode) this.config.flight.mode = options.mode;
+    if (options?.duration) this.config.flight.duration = options.duration;
+    if (options?.altitude) this.config.flight.minimumAltitude = options.altitude;
 
     this.isFlying = true;
     this.animator.cancel();
-
-    if (!this.config.rotation.pauseOnSearch) {
-      this.camera.stopRotation();
-    }
-
     this.emit('flightStart', { destination: dest });
 
     await this.animator.flyTo(
       dest,
       (progress, point) => {
-        this.camera.setAltitude(point.altitude);
         this.emit('flightProgress', {
           progress,
           position: { lat: point.lat, lng: point.lng, altitude: point.altitude },
@@ -124,6 +119,8 @@ export class GlobeMap {
     this.emit('modeChange', { mode: 'morphing' });
     await this.scene.morphToGlobe(options?.duration ?? this.config.morph.morphDuration);
     this.emit('modeChange', { mode: 'globe' });
+    // Returning to globe resets the flight flag and restores rotation
+    this.hasFlown = false;
     if (this.config.rotation.enabled) {
       this.camera.startRotation();
       this.emit('rotationStart', {});
@@ -136,8 +133,8 @@ export class GlobeMap {
     return this.camera.getPosition();
   }
 
-  setCamera(position: CameraPosition, duration = 0): void {
-    this.camera.setPosition(position, duration);
+  setCamera(position: CameraPosition): void {
+    this.camera.setPosition(position);
   }
 
   // ─── Events ─────────────────────────────────────────────────────────────────
@@ -155,31 +152,32 @@ export class GlobeMap {
     this.handlers.get(event)?.forEach(h => h(payload));
   }
 
-  // ─── Lifecycle ───────────────────────────────────────────────────────────────
+  // ─── Hover pause (only active before any flight) ─────────────────────────
 
   private setupHoverPause() {
     if (!this.config.rotation.pauseOnHover) return;
     const canvas = this.engine.viewer.canvas;
 
-    const pause = () => {
-      if (!this.isFlying) {
-        this.camera.stopRotation();
-        this.emit('rotationPause', {});
-      }
+    const onEnter = () => {
+      // Don't interfere once a flight has happened — rotation stays off
+      if (this.hasFlown || this.isFlying) return;
+      this.camera.stopRotation();
     };
-    const resume = () => {
-      if (!this.isFlying && this.config.rotation.enabled && this.scene.mode === 'globe') {
+
+    const onLeave = () => {
+      // Resume hover-pause only if no flight has occurred
+      if (this.hasFlown || this.isFlying) return;
+      if (this.config.rotation.enabled && this.scene.mode === 'globe') {
         this.camera.startRotation();
-        this.emit('rotationStart', {});
       }
     };
 
-    canvas.addEventListener('mouseenter', pause);
-    canvas.addEventListener('mouseleave', resume);
+    canvas.addEventListener('mouseenter', onEnter);
+    canvas.addEventListener('mouseleave', onLeave);
 
     this.hoverUnlisten = () => {
-      canvas.removeEventListener('mouseenter', pause);
-      canvas.removeEventListener('mouseleave', resume);
+      canvas.removeEventListener('mouseenter', onEnter);
+      canvas.removeEventListener('mouseleave', onLeave);
     };
   }
 
