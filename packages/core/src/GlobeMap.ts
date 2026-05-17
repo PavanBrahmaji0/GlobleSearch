@@ -76,6 +76,7 @@ export class GlobeMap {
     await this.animator.flyTo(
       dest,
       (progress, point) => {
+        this.camera.updateAltitude(point.altitude);
         this.emit('flightProgress', {
           progress,
           position: { lat: point.lat, lng: point.lng, altitude: point.altitude },

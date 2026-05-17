@@ -10,7 +10,7 @@ type CompleteCallback = () => void;
 export class FlightAnimator {
   private viewer: Cesium.Viewer;
   private config: GlobeMapConfig;
-  private rafId: number | null = null;
+  private preRenderHandler: (() => void) | null = null;
   private isCancelled = false;
 
   constructor(viewer: Cesium.Viewer, config: GlobeMapConfig) {
@@ -20,9 +20,9 @@ export class FlightAnimator {
 
   cancel() {
     this.isCancelled = true;
-    if (this.rafId !== null) {
-      cancelAnimationFrame(this.rafId);
-      this.rafId = null;
+    if (this.preRenderHandler) {
+      this.viewer.scene.preRender.removeEventListener(this.preRenderHandler);
+      this.preRenderHandler = null;
     }
   }
 
@@ -44,11 +44,10 @@ export class FlightAnimator {
         altitude: startCarto.height,
       };
 
-      const endAlt = this.config.flight.minimumAltitude;
       const endPoint: PathPoint = {
         lat: destination.lat,
         lng: destination.lng,
-        altitude: endAlt,
+        altitude: this.config.flight.minimumAltitude,
       };
 
       const flightConfig = this.config.flight;
@@ -63,13 +62,11 @@ export class FlightAnimator {
       const startTime = performance.now();
       const totalDuration = flightConfig.duration;
 
-      const animate = () => {
+      this.preRenderHandler = () => {
         if (this.isCancelled) return;
 
         const elapsed = performance.now() - startTime;
         const rawProgress = Math.min(elapsed / totalDuration, 1);
-
-        // Map rawProgress to path index
         const idx = Math.min(Math.round(rawProgress * steps), steps);
         const point = path[idx];
 
@@ -84,16 +81,14 @@ export class FlightAnimator {
 
         onProgress?.(rawProgress, point);
 
-        if (rawProgress < 1) {
-          this.rafId = requestAnimationFrame(animate);
-        } else {
-          this.rafId = null;
+        if (rawProgress >= 1) {
+          this.cancel();
           onComplete?.();
           resolve();
         }
       };
 
-      this.rafId = requestAnimationFrame(animate);
+      this.viewer.scene.preRender.addEventListener(this.preRenderHandler);
     });
   }
 }

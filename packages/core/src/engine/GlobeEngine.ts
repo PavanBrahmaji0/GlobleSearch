@@ -29,6 +29,9 @@ export class GlobeEngine {
 
     this.applyGlobeConfig(config);
     this.setupErrorHandling();
+
+    // Cancel any default Cesium intro / home-flight animation
+    this.viewer.camera.cancelFlight();
   }
 
   private applyGlobeConfig(config: GlobeMapConfig) {
