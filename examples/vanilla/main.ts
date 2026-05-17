@@ -1,5 +1,10 @@
 import { GlobeMap, GeocodingResult } from '@globlesearch/core';
 
+// Disable Cesium Ion so it doesn't attempt token-validation fetches
+// (which return HTML and trigger a JSON parse error in the console)
+declare const Cesium: typeof import('cesium');
+Cesium.Ion.defaultAccessToken = '';
+
 // ── Init globe ──────────────────────────────────────────────────────────────
 const container = document.getElementById('globe-container') as HTMLElement;
 
